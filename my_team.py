@@ -176,13 +176,14 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
 
         Overrides ReflexCaptureAgent.get_features
         """
-        if self.is_holding(game_state):
-            print("go HOME!!!")
+        successor = self.get_successor(game_state, action)
+
+        if CaptureAgent.get_score(self, game_state) >= 1 or \
+                successor.get_agent_state(self.index).num_carrying > 0:
             return ReflexCaptureAgent.get_features(self, game_state, action)
 
-        elif CaptureAgent.get_score(self, game_state) < 1:
+        else:
             features = util.Counter()
-            successor = self.get_successor(game_state, action)
             food_list = self.get_food(successor).as_list()
             features['successor_score'] = -len(food_list)
             # self.get_score(successor)
@@ -197,27 +198,16 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
                 features['distance_to_food'] = min_distance
             return features
 
-        else:
-            return ReflexCaptureAgent.get_features(self, game_state, action)
-
     def get_weights(self, game_state, action):
         """Get the current weights.
 
         Overrides ReflexCaptureAgent.get_weights
         """
-        if self.is_holding(game_state) or CaptureAgent.get_score(self, game_state) >= 1:
-            print("go HOME!!!")
+        successor = self.get_successor(game_state, action)
+
+        if CaptureAgent.get_score(self, game_state) >= 1 or \
+                successor.get_agent_state(self.index).num_carrying > 0:
             return ReflexCaptureAgent.get_features(self, game_state, action)
+
         else:
             return {'successor_score': 100, 'distance_to_food': -1}
-
-    def is_holding(self, game_state):
-        prev_state = CaptureAgent.get_previous_observation(self)
-
-        if prev_state is not None:
-            position = game_state.get_agent_position(self.index)
-
-            return CaptureAgent.get_food(self, prev_state)[position[0]][position[1]]
-
-        else:
-            return None

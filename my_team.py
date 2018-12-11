@@ -1,11 +1,7 @@
-"""This is where you define your own agents for inclusion in the competition.
+"""Baseline team.
 
-(This is the only file that you submit.)
-
-Initially this is a copy of random_team.py and so defines a team comprised of
-agents that just choose random actions.
-
-Shows the minimal code that needs to be implemented to have a working team.
+Example code that defines two very basic reflex agents,
+to help you get started.
 
 Champlain College CSI-480, Fall 2018
 The following code was adapted by Joshua Auerbach (jauerbach@champlain.edu)
@@ -23,9 +19,13 @@ The core projects and autograders were primarily created by John DeNero
 Student side autograding was added by Brad Miller, Nick Hay, and
 Pieter Abbeel (pabbeel@cs.berkeley.edu).
 """
-import util
+from functools import reduce
+
 from capture_agents import CaptureAgent
 import random
+import util
+from game import Directions
+from util import nearest_point
 
 
 #################
@@ -34,7 +34,7 @@ import random
 
 
 def create_team(first_index, second_index, is_red,
-                first='OffenceAgent', second='DefenceAgent'):
+                first='OffensiveReflexAgent', second='ReflexCaptureAgent'):
     """Create a team with agent indices first_index and second_index.
 
     This function returns a list of two agents that will form the
@@ -50,7 +50,6 @@ def create_team(first_index, second_index, is_red,
     any extra arguments, so you should make sure that the default
     behavior is what you want for the nightly contest.
     """
-    # The following line is an example only; feel free to change it.
     return [eval(first)(first_index), eval(second)(second_index)]
 
 
@@ -59,12 +58,8 @@ def create_team(first_index, second_index, is_red,
 ##########
 
 
-class BasicAgent(CaptureAgent):
-    """A Dummy agent to serve as an example of the necessary agent structure.
-
-    You should look at baseline_team.py for more details about how to
-    create an agent as this is the bare minimum.
-    """
+class ReflexCaptureAgent(CaptureAgent):
+    """A base class for reflex agents that chooses score-maximizing actions."""
 
     def register_initial_state(self, game_state):
         """Handle initial setup of the agent to populate useful fields.
@@ -74,55 +69,155 @@ class BasicAgent(CaptureAgent):
         A distance_calculator instance caches the maze distances
         between each pair of positions, so your agents can use:
         self.distancer.get_distance(p1, p2)
-
-        IMPORTANT: This method may run for at most 15 seconds.
         """
-        # Make sure you do not delete the following line. If you would like to
-        # use Manhattan distances instead of maze distances in order to save
-        # on initialization time, please take a look at
-        # CaptureAgent.register_initial_state in capture_agents.py.
         self.start = game_state.get_agent_position(self.index)
         CaptureAgent.register_initial_state(self, game_state)
 
-        # Your initialization code goes here, if you need any.
-
     def choose_action(self, game_state):
-        """Choose from avaliable actions randomly."""
+        """Choose the action with the highest Q(s,a)."""
         actions = game_state.get_legal_actions(self.index)
 
-        # You should change this in your own agent.
+        # You can profile your evaluation time by uncommenting these lines
+        # (need to import time)
+        # start = time.time()
+        values = [self.evaluate(game_state, a) for a in actions]
+        # print('eval time for agent %d: %.4f' %
+        #       (self.index, time.time() - start))
 
-        return random.choice(actions)
+        max_value = max(values)
+        best_actions = [a for a, v in zip(actions, values) if v == max_value]
+
+        food_left = len(self.get_food(game_state).as_list())
+
+        if food_left <= 2:
+            best_dist = float("inf")
+            for action in actions:
+                successor = self.get_successor(game_state, action)
+                pos2 = successor.get_agent_position(self.index)
+                dist = self.get_maze_distance(self.start, pos2)
+                if dist < best_dist:
+                    best_action = action
+                    best_dist = dist
+            return best_action
+
+        return random.choice(best_actions)
 
     def get_successor(self, game_state, action):
-        return game_state.generate_successor(self.index, action)
+        """Find the next successor: a grid position (location tuple)."""
+        successor = game_state.generate_successor(self.index, action)
+        pos = successor.get_agent_state(self.index).get_position()
+        if pos != nearest_point(pos):
+            # Only half a grid position was covered
+            return successor.generate_successor(self.index, action)
+        else:
+            return successor
 
     def evaluate(self, game_state, action):
+        """Compute a linear combination of features and feature weights."""
         features = self.get_features(game_state, action)
         weights = self.get_weights(game_state, action)
         return features * weights
 
     def get_features(self, game_state, action):
+        """Return a counter of features for the state.
+
+        Overrides ReflexCaptureAgent.get_features
+        """
         features = util.Counter()
         successor = self.get_successor(game_state, action)
-        features['successor_score'] = self.get_score(successor)
-        return None
+
+        my_state = successor.get_agent_state(self.index)
+        my_pos = my_state.get_position()
+
+        # Computes whether we're on defense (1) or offense (0)
+        features['on_defense'] = 1
+        if my_state.is_pacman:
+            features['on_defense'] = 0
+
+        # Computes distance to invaders we can see
+        enemies = [successor.get_agent_state(i)
+                   for i in self.get_opponents(successor)]
+        invaders = [a for a in enemies
+                    if a.is_pacman and a.get_position() is not None]
+        features['num_invaders'] = len(invaders)
+        if len(invaders) > 0:
+            dists = [self.get_maze_distance(my_pos, a.get_position())
+                     for a in invaders]
+            features['invader_distance'] = min(dists)
+
+        if action == Directions.STOP:
+            features['stop'] = 1
+        rev = Directions.REVERSE[
+            game_state.get_agent_state(self.index).configuration.direction]
+        if action == rev:
+            features['reverse'] = 1
+
+        return features
 
     def get_weights(self, game_state, action):
-        return {'successor_score': 1.0}
+        """Get the current weights.
+
+        Overrides ReflexCaptureAgent.get_weights
+        """
+        return {'num_invaders': -1000, 'on_defense': 100,
+                'invader_distance': -10, 'stop': -100, 'reverse': -2}
 
 
-class OffenceAgent(BasicAgent):
+class OffensiveReflexAgent(ReflexCaptureAgent):
+    """A reflex agent that seeks food.
+
+    This is an agent I give you to get an idea of what an offensive agent
+    might look like, but it is by no means the best or only way to build an
+    offensive agent.
+    """
+
     def get_features(self, game_state, action):
-        super().get_features(game_state, action)
+        """Return a counter of features for the state.
+
+        Overrides ReflexCaptureAgent.get_features
+        """
+        if self.is_holding(game_state):
+            print("go HOME!!!")
+            return ReflexCaptureAgent.get_features(self, game_state, action)
+
+        elif CaptureAgent.get_score(self, game_state) < 1:
+            features = util.Counter()
+            successor = self.get_successor(game_state, action)
+            food_list = self.get_food(successor).as_list()
+            features['successor_score'] = -len(food_list)
+            # self.get_score(successor)
+
+            # Compute distance to the nearest food
+
+            # This should always be True,  but better safe than sorry
+            if len(food_list) > 0:
+                my_pos = successor.get_agent_state(self.index).get_position()
+                min_distance = min(self.get_maze_distance(my_pos, food)
+                                   for food in food_list)
+                features['distance_to_food'] = min_distance
+            return features
+
+        else:
+            return ReflexCaptureAgent.get_features(self, game_state, action)
 
     def get_weights(self, game_state, action):
-        super().get_weights(game_state, action)
+        """Get the current weights.
 
+        Overrides ReflexCaptureAgent.get_weights
+        """
+        if self.is_holding(game_state) or CaptureAgent.get_score(self, game_state) >= 1:
+            print("go HOME!!!")
+            return ReflexCaptureAgent.get_features(self, game_state, action)
+        else:
+            return {'successor_score': 100, 'distance_to_food': -1}
 
-class DefenceAgent(BasicAgent):
-    def get_features(self, game_state, action):
-        super().get_features(game_state, action)
+    def is_holding(self, game_state):
+        prev_state = CaptureAgent.get_previous_observation(self)
 
-    def get_weights(self, game_state, action):
-        super().get_weights(game_state, action)
+        if prev_state is not None:
+            position = game_state.get_agent_position(self.index)
+
+            return CaptureAgent.get_food(self, prev_state)[position[0]][position[1]]
+
+        else:
+            return None

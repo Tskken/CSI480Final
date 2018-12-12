@@ -3,8 +3,6 @@
 Example code that defines two very basic reflex agents,
 to help you get started.
 
-
-
 Author: Dylan Blanchard, Sloan Anderson, & Alice Easter
 Class: CSI-480-01
 Assignment: Final Project -- CTF
@@ -51,7 +49,7 @@ from util import nearest_point
 
 
 def create_team(first_index, second_index, is_red,
-                first='OffensiveReflexAgent', second='ReflexCaptureAgent'):
+                first='OffensiveReflexAgent', second='OffensiveReflexAgent'):
     """Create a team with agent indices first_index and second_index.
 
     This function returns a list of two agents that will form the
@@ -101,9 +99,13 @@ class ReflexCaptureAgent(CaptureAgent):
         # print('eval time for agent %d: %.4f' %
         #       (self.index, time.time() - start))
 
+        # Get best value from states evaluation
         max_value = max(values)
+
+        # Get best action based on best value
         best_actions = [a for a, v in zip(actions, values) if v == max_value]
 
+        # Get number of food left
         food_left = len(self.get_food(game_state).as_list())
 
         if food_left <= 2:

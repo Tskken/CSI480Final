@@ -229,4 +229,4 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
             return super().get_weights(game_state, action)
 
         else:
-            return {'successor_score': 10, 'distance_to_food': -1}
+            return {'successor_score': 25, 'distance_to_food': -1}

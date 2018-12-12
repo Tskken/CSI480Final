@@ -196,14 +196,15 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
         successor = self.get_successor(game_state, action)
 
         if CaptureAgent.get_score(self, game_state) >= 1:
-            return ReflexCaptureAgent.get_features(self, game_state, action)
-
+            return super().get_features(game_state, action)
         else:
             features = util.Counter()
             if successor.get_agent_state(self.index).num_carrying > 0:
-                food_list = self.get_food_you_are_defending(successor).as_list()
+                food_list = self.get_food_you_are_defending(successor).\
+                    as_list()
             else:
                 food_list = self.get_food(successor).as_list()
+
             features['successor_score'] = -len(food_list)
             # self.get_score(successor)
 
@@ -222,10 +223,10 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
 
         Overrides ReflexCaptureAgent.get_weights
         """
-        successor = self.get_successor(game_state, action)
+        #successor = self.get_successor(game_state, action)
 
         if CaptureAgent.get_score(self, game_state) >= 1:
-            return ReflexCaptureAgent.get_weights(self, game_state, action)
+            return super().get_weights(game_state, action)
 
         else:
-            return {'successor_score': 100, 'distance_to_food': -1}
+            return {'successor_score': 10, 'distance_to_food': -1}

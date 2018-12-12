@@ -199,7 +199,7 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
             return super().get_features(game_state, action)
         else:
             features = util.Counter()
-            if successor.get_agent_state(self.index).num_carrying > 0:
+            if game_state.get_agent_state(self.index).num_carrying > 0:
                 food_list = self.get_food_you_are_defending(successor).\
                     as_list()
             else:
